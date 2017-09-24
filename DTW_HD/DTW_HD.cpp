@@ -54,14 +54,6 @@ using namespace std;
 #define SD 0.01
 #define ClusterNum 2
 
-//Parameters for SSH contrast experiment
-#define Delta 4 //Step Size
-#define Size_W 16 //Vector Size
-#define NB (T-Size_W)/Delta //Stream Size
-#define N_grams 4 //The number of grams
-#define Length_N pow(2,N_grams) //The length of each of the n grams
-#define HashtableNum 20 //The number of hash tables
-
 
 // r=0.04   t=140
 // r=0.06   t=108
@@ -1237,74 +1229,6 @@ vector<pair<vector<int>, int > > DTW_hierachical_clustering(int cluster_num, flo
     return DTW_cluster;
 }
 
-//师姐这个function是按照那篇paper的方法写出的纯LSH Hierachical Clustering，以碰撞最多次为最近邻标准，没有与DTW结合
-/*vector<pair<vector<int>, int > > LSH_hierachical_clustering(int cluster_num, float*** datasets, float*** datasets_PAA, float**** hash_functions, float**** hash_value_paa){
-    struct sort_StoL {
-        bool operator()(const std::pair<pair<int,int>, float> &left, const std::pair<pair<int,int>, float> &right) {
-            return left.second < right.second;
-        }
-    };//from small to large
-    
-    //cluster initialization
-    vector<pair<vector<int>, int > > LSH_cluster;//The vector<int> is the index of time series in the cluster, the float** is the centring time series of these indices
-    for(int i=0;i<M;i++){
-        LSH_cluster.push_back(make_pair(vector<int> {i}, i));
-    }
-    
-    
-    for(int i=0;i<M-cluster_num;i++){
-        int count_most=-INFINITY;
-        vector<pair<vector<int>, int > >::iterator iter_index_left;
-        vector<pair<vector<int>, int > >::iterator iter_index_right;
-        for(vector<pair<vector<int>, int > >::iterator it1=LSH_cluster.begin();it1!=LSH_cluster.end();++it1){
-            
-            float ***query_hash = CalculateLSH(datasets_PAA[(*it1).second], hash_functions);//query_hash[L][K][BlockNum], hashed values for the query series
-            for(vector<pair<vector<int>, int > >::iterator it2=it1+1;it2!=LSH_cluster.end();++it2){
-                int collision_count=0;
-                for (int l = 0; l<L; l++)
-                {
-                    for (int k = 0; k<K; k++)
-                    {
-                        for (int n = 0; n<BlockNum; n++)
-                        {
-                            if (hash_value_paa[(*it2).second][l][k][n] == query_hash[l][k][n])
-                            {
-                                collision_count++;
-                            }
-                        }
-                    }
-                }
-                if(collision_count>=count_most){
-                    iter_index_left=it1;
-                    iter_index_right=it2;
-                    count_most=collision_count;
-                }
-            }
-                 
-            for (int l = 0; l<L; l++) {
-                for (int k = 0; k<K; k++) {
-                    delete[]query_hash[l][k];
-                }
-                delete[]query_hash[l];
-            }
-            delete[]query_hash;
-        }
-        //cout<<"Distance :"<<smallest<<endl;
-        LSH_cluster.push_back(make_cluster((*iter_index_left).second,(*iter_index_right).second,(*iter_index_left).first,(*iter_index_right).first,datasets));
-        LSH_cluster.erase(iter_index_right);
-        LSH_cluster.erase(iter_index_left);
-    }
-    
-    for(int m=0;m<LSH_cluster.size();m++){
-        cout<<"Cluster "<<m+1<<": ";
-        for(int i=0;i<LSH_cluster[m].first.size();i++){
-            cout<<(LSH_cluster[m].first)[i]<<":"<<datasets[(LSH_cluster[m].first)[i]][0][D]<<", ";
-        }
-        cout<<endl;
-    }
-    
-    return LSH_cluster;
-}*/
 
 vector<pair<vector<int>, int > > LSH_hierachical_clustering(int cluster_num, float*** datasets, float*** datasets_PAA, float**** hash_functions, float**** hash_value_paa){
     struct sort_StoL {
@@ -1513,207 +1437,6 @@ void accuracy_LSH_hierachical_clustering(vector<pair<vector<int>, int > > cluste
         }
     }
 }
-float* generateRandom_vector_r(){
-    //Generate r vector
-    default_random_engine generator(time(NULL));
-    normal_distribution<float> distribution(0.0, 1.0);
-    float* random=new float[Size_W];
-    for(int i=0;i<Size_W;i++){
-        float temp = distribution(generator);
-        while (temp<0 || temp>1)
-            temp = distribution(generator);
-        random[i]=temp;
-    }
-    return random;
-}
-
-vector<int> bit_profile_extraction_onevalue(float* vector_r, float** q){
-    vector<int> bit_profile(NB);
-    for(int b=0;b<NB;b++){
-        float sum=0;
-        for(int d=0;d<D;d++){
-            for(int w=0;w<Size_W;w++){
-                sum+=q[b*Delta+w][d]*vector_r[w];
-            }
-        }
-        if(sum>=0){
-            bit_profile[b]=1;
-        }
-        else{
-            bit_profile[b]=-1;
-        }
-    }
-    /*cout<<"Bit Profile 1D: "<<endl;
-    for(vector<int>::iterator it = bit_profile.begin(); it != bit_profile.end(); ++it){
-        cout<<(*it)<<" ";
-    }
-    cout<<endl;*/
-    return bit_profile;
-}
-
-vector< vector<int> > bit_profile_extraction_dvalue(float* vector_r, float** q){
-    vector<vector<int > > bit_profile(NB,vector<int >(D));
-    for(int b=0;b<NB;b++){
-        for(int d=0;d<D;d++){
-            float sum=0;
-            for(int w=0;w<Size_W;w++){
-                sum+=q[b*Delta+w][d]*vector_r[w];
-            }
-            if(sum>=0){
-                bit_profile[b][d]=1;
-            }
-            else{
-                bit_profile[b][d]=-1;
-            }
-        }
-    }
-    /*cout<<"Bit Profile HD: "<<endl;
-    for(vector< vector<int> >::iterator it = bit_profile.begin(); it != bit_profile.end(); ++it){
-        for(vector<int>::iterator it2 = (*it).begin(); it2 != (*it).end(); ++it2){
-            cout<<(*it2)<<" ";
-        }
-        cout<<endl;
-    }*/
-    return bit_profile;
-}
-
-vector<int> generate_n_grams_1d(vector<int> bit_vector){
-    vector<int> n_grams(Length_N,0);
-    for(int n=0;n<NB-N_grams;n++){
-        int index=0;
-        int count=N_grams-1;
-        for(int i=0;i<N_grams;i++){
-            if(bit_vector[n+i]==1){
-                index+=pow(2,count);
-            }
-            count--;
-        }
-        //cout<<"index: "<<index<<endl;
-        n_grams[index]++;
-    }
-    return n_grams;
-}
-
-vector<int> generate_n_grams_hd(vector< vector<int> > bit_vector){
-    vector<int> n_grams(Length_N,0);
-    for(int n=0;n<NB-N_grams;n++){
-        for(int d=0;d<D;d++){
-            int index=0;
-            int count=N_grams-1;
-            for(int i=0;i<N_grams;i++){
-                if(bit_vector[n+i][d]==1){
-                    index+=pow(2,count);
-                }
-                count--;
-            }
-            //cout<<"index: "<<index<<endl;
-            n_grams[index]++;
-        }
-    }
-    return n_grams;
-}
-
-vector<int> gen_minhash_tables(vector<int> n_grams){
-    vector<int> hash_table(HashtableNum);
-    int seed=5;
-    for(int h=0;h<HashtableNum;h++){
-        int hash_value=1;
-        //cout<<"seed: "<<seed<<endl;
-        srand(seed);
-        while(1){
-            float random = ((float)rand() / RAND_MAX)* (Length_N - 0);
-            float integer;
-            float decimal=modf(random,&integer);
-            if(decimal<n_grams[integer]/float(NB-N_grams)){
-                //cout<<random<<": "<<decimal<<endl;
-                //cout<<n_grams[integer]<<"/"<<float(NB-N_grams)<<"="<<n_grams[integer]/float(NB-N_grams)<<endl;
-                break;
-            }
-            hash_value++;
-        }
-        hash_table[h]=hash_value;
-        seed*=3;
-    }
-    cout<<"Hash Table: "<<endl;
-    for(vector<int>::iterator it = hash_table.begin(); it != hash_table.end(); ++it){
-        cout<<(*it)<<" ";
-    }
-    cout<<endl;
-    return hash_table;
-}
-
-vector<int> SSH_indexing_1d(float** query, float***datasets){
-    vector<int> candidate;
-    vector<vector<int > > full_hash_tables(M,vector<int >(HashtableNum));
-    float* vectorR=generateRandom_vector_r();
-    
-    vector<int > query_hash_table=gen_minhash_tables(generate_n_grams_1d(bit_profile_extraction_onevalue(vectorR,query)));
-    
-    for(int m=0;m<M;m++){
-        full_hash_tables[m]=gen_minhash_tables(generate_n_grams_1d(bit_profile_extraction_onevalue(vectorR,datasets[m])));
-        for(int h=0;h<HashtableNum;h++){
-            if(query_hash_table[h]==full_hash_tables[m][h]){
-                candidate.push_back(m);
-                break;
-            }
-        }
-    }
-    
-    return candidate;
-}
-
-vector<int> SSH_indexing_hd(float** query, float***datasets){
-    vector<int> candidate;
-    vector<vector<int > > full_hash_tables(M,vector<int >(HashtableNum));
-    float* vectorR=generateRandom_vector_r();
-    
-    vector<int > query_hash_table=gen_minhash_tables(generate_n_grams_hd(bit_profile_extraction_dvalue(vectorR,query)));
-    
-    for(int m=0;m<M;m++){
-        full_hash_tables[m]=gen_minhash_tables(generate_n_grams_hd(bit_profile_extraction_dvalue(vectorR,datasets[m])));
-        for(int h=0;h<HashtableNum;h++){
-            if(query_hash_table[h]==full_hash_tables[m][h]){
-                candidate.push_back(m);
-                break;
-            }
-        }
-    }
-    
-    return candidate;
-}
-
-/*vector<int>  SSH_KNN(vector<int> candidate, float** query, float*** datasets) {
-    int count = 0;
-    struct sort_pred {
-        bool operator()(const std::pair<int, float> &left, const std::pair<int, float> &right) {
-            return left.second < right.second;
-        }
-    };
-    vector<pair<int, float> > candidate_KNN;
-    for (vector<int>::iterator it = candidate.begin(); it != candidate.end(); ++it) {
-        if (count<KNN) {
-            candidate_KNN.push_back(make_pair((*it), DTW_HD(query, datasets[*it])));
-            sort(candidate_KNN.begin(), candidate_KNN.end(), sort_pred());
-        }
-        else {
-            sort(candidate_KNN.begin(), candidate_KNN.end(), sort_pred());
-            float temp = DTW_HD(query, datasets[*it]);
-            if (temp<candidate_KNN.back().second) {
-                candidate_KNN.pop_back();
-                candidate_KNN.push_back(make_pair((*it), temp));
-            }
-        }
-        count++;
-    }
-    vector<int> KNN_output;
-    for (vector<pair<int, float> >::iterator it = candidate_KNN.begin(); it != candidate_KNN.end(); ++it) {
-        KNN_output.push_back((*it).first);
-        //cout<<(*it).second<<endl;
-    }
-    
-    return  KNN_output;
-    
-}*/
 
 int main()
 {
@@ -1757,28 +1480,6 @@ int main()
     }
 	cout << "finish normalization" << endl;
     
-    
-    //Bit Profile Stream Testing
-    cout<<"Bit Profile Stream Testing: "<<endl;
-    float* vectorR=generateRandom_vector_r();
-    vector<int> test=bit_profile_extraction_onevalue(vectorR,datasets[40]);
-    /*for(vector<int>::iterator it = test.begin(); it != test.end(); ++it){
-        cout<<(*it)<<" ";
-    }*/
-    //vector< vector<int> > test2=bit_profile_extraction_dvalue(vectorR,datasets[40]);
-    cout<<"Size: "<<test.size()<<endl;
-    vector<int> grams=generate_n_grams_1d(test);
-    for(vector<int>::iterator it = grams.begin(); it != grams.end(); ++it){
-        cout<<(*it)<<" ";
-    }
-    cout<<"Size2: "<<grams.size()<<endl;
-    vector<int> hash_tables=gen_minhash_tables(grams);
-    for(vector<int>::iterator it = hash_tables.begin(); it != hash_tables.end(); ++it){
-        cout<<(*it)<<" ";
-    }
-    cout<<"Size3: "<<hash_tables.size()<<endl;
-    cout<<"/****************************************************************************/"<<endl;
-    
 	//cout << "LB_PAA Test: " << compute_LB_PAA_HD(datasets[0], datasets[2]) << endl;
     clock_t DTW_onceBegin=clock();
 	cout << "DTW_HD Test: " << DTW_HD(datasets[query_id], datasets[2]) << endl;
@@ -1790,17 +1491,17 @@ int main()
     cout<<"/****************************************************************************/"<<endl;
     
     //DTW Hierachical Clustering Ground Truth
-    /*cout<<"DTW Hierachical Clustering Ground Truth: "<<endl;
+    cout<<"DTW Hierachical Clustering Ground Truth: "<<endl;
     clock_t beginDTWHC = clock();
     vector<pair<vector<int>, int > > DTW_clusters=DTW_hierachical_clustering(ClusterNum, datasets);
     clock_t endDTWHC = clock();
     double elapsed_secsDTWHC = double(endDTWHC - beginDTWHC) / CLOCKS_PER_SEC;
     cout<<"The time spent for DTW Hierachical Clustering ground truth: "<< elapsed_secsDTWHC<<" seconds."<<endl;
-    accuracy_DTW_hierachical_clustering(DTW_clusters, datasets);*/
+    accuracy_DTW_hierachical_clustering(DTW_clusters, datasets);
     cout<<"/****************************************************************************/"<<endl;
 	
 	//DTW Range Query Ground Truth
-	/*cout << "DTW Range Query Ground Truth: " << endl;
+	cout << "DTW Range Query Ground Truth: " << endl;
         beginRQ = clock();
 	int count = 0;
 	vector<int> DTW_groundtruth_Range = DTW_GroundTruth_Range(datasets[query_id], datasets);
@@ -1811,12 +1512,12 @@ int main()
 	cout << "The total number of series for DTW range query ground truth: " << count << endl;
 	endRQ = clock();
 	double elapsed_secsRQ = double(endRQ - beginRQ) / CLOCKS_PER_SEC;
-	cout << "The time spent for DTW range query ground truth: " << elapsed_secsRQ << " seconds." << endl;*/
+	cout << "The time spent for DTW range query ground truth: " << elapsed_secsRQ << " seconds." << endl;
 	//cout << "/****************************************************************************/" << endl;
 
 
     //DTW KNN Query Ground Truth
-    /*cout<<"DTW KNN Query Ground Truth: "<<endl;
+    cout<<"DTW KNN Query Ground Truth: "<<endl;
     clock_t beginDTWKNN = clock();
     int countDTWKNN=0;
     vector<int> DTW_groundtruth_KNN=DTW_GroundTruth_KNN(datasets[query_id],datasets);
@@ -1827,49 +1528,9 @@ int main()
     cout<<"The total number of candidate series for DTW KNN Query: "<<countDTWKNN<<endl;
     clock_t endDTWKNN = clock();
     double elapsed_secsDTWKNN = double(endDTWKNN - beginDTWKNN) / CLOCKS_PER_SEC;
-    cout<<"The time spent for DTW KNN Query ground truth: "<< elapsed_secsDTWKNN<<" seconds."<<endl;*/
+    cout<<"The time spent for DTW KNN Query ground truth: "<< elapsed_secsDTWKNN<<" seconds."<<endl;
     cout<<"/****************************************************************************/"<<endl;
-    
-    //SSH indexing 1D
-    cout<<"SSH Query Indexing: "<<endl;
-    clock_t SSH_begin = clock();
-    vector<int> SSH_candidate=SSH_indexing_1d(datasets[query_id],datasets);
-    cout << "The number of SSH cadidates: " << SSH_candidate.size()<< "." << endl;
-    for(vector<int>::iterator it=SSH_candidate.begin();it!=SSH_candidate.end();++it){
-        //cout<<"Candidate Index: "<<(*it)<<endl;
-    }
-    clock_t SSH_end = clock();
-    double elapsed_secsSSH = double(SSH_end - SSH_begin) / CLOCKS_PER_SEC;
-    cout<<"The time spent for SSH indexing: "<< elapsed_secsSSH<<" seconds."<<endl;
-    cout<<"/****************************************************************************/"<<endl;
-    
-    //SSH indexing HD
-    cout<<"SSH Query Indexing: "<<endl;
-    clock_t SSH_begin_hd = clock();
-    vector<int> SSH_candidate_hd=SSH_indexing_hd(datasets[query_id],datasets);
-    cout << "The number of SSH cadidates HD: " << SSH_candidate_hd.size()<< "." << endl;
-    for(vector<int>::iterator it=SSH_candidate_hd.begin();it!=SSH_candidate_hd.end();++it){
-        //cout<<"Candidate Index: "<<(*it)<<endl;
-    }
-    clock_t SSH_end_hd = clock();
-    double elapsed_secsSSH_hd = double(SSH_end_hd - SSH_begin_hd) / CLOCKS_PER_SEC;
-    cout<<"The time spent for SSH indexing HD: "<< elapsed_secsSSH_hd<<" seconds."<<endl;
-    cout<<"/****************************************************************************/"<<endl;
-    
-    //SSH KNN
-    /*cout<<"SSH KNN: "<<endl;
-    clock_t SSHKNN_begin = clock();
-    vector<int> ssh_KNN=SSH_KNN(SSH_candidate,datasets[query_id],datasets);
-    cout << "The number of SSH KNN: " << ssh_KNN.size()<< "." << endl;
-    for (vector<int>::iterator it = ssh_KNN.begin(); it != ssh_KNN.end(); ++it) {
-        cout << "Candidate series number for SSH KNN: " << (*it) << endl;
-    }
-    clock_t SSHKNN_end = clock();
-    double elapsed_secs_SSHKNN = double(SSHKNN_end - SSHKNN_begin) / CLOCKS_PER_SEC;*/
-    //cout << "the accuracy of direct SSH KNN: " << accuracy_KNN(DTW_groundtruth_KNN, ssh_KNN, query_id, datasets) << endl;
-    //cout << "the accuracy of direct SSH KNN Label classification: " << accuracy_KNN_classification(DTW_groundtruth_KNN, ssh_KNN, query_id, datasets) << endl;
-    //cout<<"The time spent for SSH KNN: "<< elapsed_secs_SSHKNN<<" seconds."<<endl;
-    cout<<"/****************************************************************************/"<<endl;
+
     
 	//LSH method
 	cout << "LSH method: " << endl;
@@ -1911,17 +1572,17 @@ int main()
 	cout <<"****************************************************************************" << endl;
 
     //LSH Hierachical Clustering Ground Truth
-    /*cout<<"LSH Hierachical Clustering Ground Truth: "<<endl;
+    cout<<"LSH Hierachical Clustering Ground Truth: "<<endl;
     clock_t beginLSHHC = clock();
     vector<pair<vector<int>, int > > LSH_clusters=LSH_hierachical_clustering(ClusterNum, datasets, dataset_PAA, hash_functions, hash_value);
     clock_t endLSHHC = clock();
     double elapsed_secsLSHHC = double(endLSHHC - beginLSHHC) / CLOCKS_PER_SEC;
     cout<<"The time spent for LSH Hierachical Clustering ground truth: "<< elapsed_secsLSHHC<<" seconds."<<endl;
-    accuracy_LSH_hierachical_clustering(LSH_clusters, datasets);*/
+    accuracy_LSH_hierachical_clustering(LSH_clusters, datasets);
     cout<<"/****************************************************************************/"<<endl;
     
     //LSH range NN without pruning
-	/*clock_t beginLSH_range_NN = clock();
+	clock_t beginLSH_range_NN = clock();
 	vector<int>  candidateLSH_range_NN = LSH_range_NN(candidateLSH, datasets[query_id], datasets);
 	int LSH_range_NN_count = 0;
 	for (vector<int> ::iterator it = candidateLSH_range_NN.begin(); it != candidateLSH_range_NN.end(); ++it) {
@@ -1932,12 +1593,12 @@ int main()
 	clock_t endLSH_range_NN = clock();
 	double elapsed_secsLSH_range_NN = double(endLSH_range_NN - beginLSH_range_NN) / CLOCKS_PER_SEC;
 	cout << "The time spent for LSH range NN without pruning: " << elapsed_secsLSH_range_NN << " seconds." << endl;
-        cout << "the accuracy of LSH range NN query: " << accuracy(DTW_groundtruth_Range, candidateLSH_range_NN) << endl;*/
+        cout << "the accuracy of LSH range NN query: " << accuracy(DTW_groundtruth_Range, candidateLSH_range_NN) << endl;
 	//cout << "****************************************************************************" << endl;
 	
 
 	//LSH range NN with LB pruning
-	/*clock_t beginLSH_range_NN_LB = clock();
+	clock_t beginLSH_range_NN_LB = clock();
 	vector<int > candidateLSH_range_NN_LB = LSH_LB_Pruning_range(candidateLSH, hash_functions, hash_value, dataset_PAA[query_id],query_id, datasets);
 	int LSH_range_NN_LB_count = 0;
 	for (vector<int >::iterator it = candidateLSH_range_NN_LB.begin(); it != candidateLSH_range_NN_LB.end(); ++it) {
@@ -1948,7 +1609,7 @@ int main()
 	clock_t endLSH_range_NN_LB = clock();
 	double elapsed_secsLSH_range_NN_LB = double(endLSH_range_NN_LB - beginLSH_range_NN_LB) / CLOCKS_PER_SEC;
 	cout << "The time spent for LSH range NN with LB pruning: " << elapsed_secsLSH_range_NN_LB << " seconds." << endl;
-        cout << "the accuracy of LSH-LB pruning range NN query: " << accuracy(DTW_groundtruth_Range, candidateLSH_range_NN_LB) << endl;*/
+        cout << "the accuracy of LSH-LB pruning range NN query: " << accuracy(DTW_groundtruth_Range, candidateLSH_range_NN_LB) << endl;
 	//cout << "****************************************************************************" << endl;
 
 
